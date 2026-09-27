@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CrossShare Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; -webkit-font-smoothing: antialiased; }
+        .tab-btn.active { background-color: #2563eb; color: #fff; }
+        #toast { transition: opacity 0.3s, transform 0.3s; }
+        #toast.show { opacity: 1 !important; transform: translateY(0) !important; }
+        img.preview-img { max-width: 100%; border-radius: 0.375rem; display: block; }
+        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 0.5rem; }
+        .section-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-3 text-sm">
+
+    <!-- Auth Screen -->
+    <div id="authScreen" class="w-full max-w-md mt-8 space-y-3">
+        <h1 class="text-2xl font-bold text-center text-blue-400 tracking-tight">CrossShare</h1>
+        <p class="text-center text-gray-400 text-xs">Log in to link your phone</p>
+        <input id="email" type="email" placeholder="Email" class="w-full p-2.5 rounded-md bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500">
+        <input id="password" type="password" placeholder="Password" class="w-full p-2.5 rounded-md bg-gray-800 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500">
+        <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 p-2.5 rounded-md font-bold text-sm transition">Log In</button>
+        <p id="authError" class="text-red-400 text-center text-xs hidden">Login failed</p>
+    </div>
+
+    <!-- Main Screen -->
+    <div id="mainScreen" class="w-full max-w-md mt-4 space-y-3 hidden flex-col">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-blue-400 tracking-tight leading-none">CrossShare</h1>
+                <p class="text-[11px] text-gray-500 mt-1">Phone ↔ PC clipboard and files</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="statusText" class="text-[11px] text-gray-400">Offline</span>
+                <div id="status" class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="grid grid-cols-3 gap-1 bg-gray-800 p-1 rounded-md border border-gray-700">
+            <button id="tabBtnClipboard" onclick="switchTab('clipboard')" class="tab-btn active p-1.5 rounded text-xs font-bold text-gray-300 transition">Clipboard</button>
+            <button id="tabBtnFiles" onclick="switchTab('files')" class="tab-btn p-1.5 rounded text-xs font-bold text-gray-300 transition">Files</button>
+            <button id="tabBtnDevices" onclick="switchTab('devices')" class="tab-btn p-1.5 rounded text-xs font-bold text-gray-300 transition">Devices</button>
+        </div>
+
+        <div class="flex items-center gap-2 text-[11px] text-gray-400">
+            <label for="ttlSelect" class="shrink-0">Keep on server:</label>
+            <select id="ttlSelect" class="flex-1 p-1.5 rounded-md bg-gray-800 border border-gray-700 text-white text-xs focus:outline-none focus:border-blue-500">
+                <option value="60">1 minute</option>
+                <option value="1800" selected>30 minutes</option>
+                <option value="3600">1 hour</option>
+                <option value="86400">1 day</option>
+                <option value="604800">7 days</option>
+                <option value="2592000">30 days</option>
+            </select>
+        </div>
+
+        <!-- Clipboard Tab -->
+        <div id="tabClipboard" class="space-y-3">
+            <div class="card p-3 space-y-2">
+                <h2 class="section-title">From PC</h2>
+                <div id="receivedText" class="p-2.5 bg-gray-900 rounded-md min-h-[64px] break-words text-gray-300 text-sm">
+                    Waiting for clipboard...
+                </div>
+                <button onclick="copyToPhone()" class="w-full bg-green-600 hover:bg-green-700 p-2.5 rounded-md font-bold text-sm transition flex justify-center items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                    Copy to Phone
+                </button>
+            </div>
+
+            <div class="card p-3 space-y-2">
+                <h2 class="section-title">To PC</h2>
+                <textarea id="sendText" rows="3" placeholder="Paste or type text here..." class="w-full p-2.5 rounded-md bg-gray-900 border border-gray-700 text-white text-sm focus:outline-none focus:border-blue-500"></textarea>
+                <div class="flex gap-2">
+                    <button onclick="pasteFromPhone()" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2.5 rounded-md font-bold transition text-xs">
+                        Paste from Clipboard
+                    </button>
+                    <button onclick="sendToPC()" class="flex-1 bg-blue-600 hover:bg-blue-700 p-2.5 rounded-md font-bold text-sm transition flex justify-center items-center gap-2">
+                        Send to PC
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Files Tab -->
+        <div id="tabFiles" class="space-y-3 hidden">
+            <div class="card p-3 space-y-2">
+                <h2 class="section-title">Send file</h2>
+                <input id="fileInput" type="file" class="w-full text-xs text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-blue-600 file:text-white file:font-bold file:text-xs">
+                <button onclick="sendFile()" class="w-full bg-blue-600 hover:bg-blue-700 p-2.5 rounded-md font-bold text-sm transition">Send</button>
+                <p id="uploadProgress" class="text-[11px] text-gray-400 mono hidden"></p>
+            </div>
+            <div class="card p-3 space-y-2">
+                <h2 class="section-title">Incoming files</h2>
+                <div id="fileList" class="space-y-2">
+                    <p class="text-gray-500 text-xs">No files received yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Devices Tab -->
+        <div id="tabDevices" class="space-y-3 hidden">
+            <div class="card p-3 space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                    <h2 class="section-title">Linked devices</h2>
+                    <button onclick="disconnectAllOthers()" class="shrink-0 text-[11px] bg-red-600/20 hover:bg-red-600/30 border border-red-600/40 text-red-300 px-2.5 py-1.5 rounded-md font-bold transition">Disconnect all others</button>
+                </div>
+                <div id="deviceList" class="space-y-2">
+                    <p class="text-gray-500 text-xs">Waiting for presence...</p>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="logout()" class="text-red-400 text-xs underline text-center w-full mt-2">Log Out</button>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 translate-y-4 opacity-0 pointer-events-none bg-gray-900 border border-gray-700 text-white text-xs px-3 py-1.5 rounded-md shadow-lg max-w-[90vw] text-center z-50"></div>
+
+    <script>
+        let ws;
+        let pingTimer = null;
+        let reconnectTimer = null;
+        let reconnectDelay = 2000;
+        let deviceToken = localStorage.getItem('device_token');
+        let deviceId = localStorage.getItem('device_id');
+        let currentReceivedPayload = "";
+        let presenceDevices = [];
+        let toastTimer = null;
+
+        const authScreen = document.getElementById('authScreen');
+        const mainScreen = document.getElementById('mainScreen');
+        const statusIndicator = document.getElementById('status');
+        const statusText = document.getElementById('statusText');
+
+        if (deviceToken && deviceId) {
+            authScreen.classList.add('hidden');
+            mainScreen.classList.remove('hidden');
+            mainScreen.classList.add('flex');
+            connectWS();
+        }
+
+        function switchTab(name) {
+            const tabs = ['clipboard', 'files', 'devices'];
+            tabs.forEach(t => {
+                document.getElementById('tab' + capitalize(t)).classList.toggle('hidden', t !== name);
+                document.getElementById('tabBtn' + capitalize(t)).classList.toggle('active', t === name);
+            });
+        }
+
+        function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+        function toast(msg) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+        }
+
+        function setStatus(online, detail) {
+            statusIndicator.classList.remove('bg-red-500', 'bg-green-500', 'bg-yellow-500');
+            statusIndicator.classList.add(online ? 'bg-green-500' : 'bg-red-500');
+            if (statusText) statusText.textContent = detail || (online ? 'Connected' : 'Offline');
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        function humanSize(n) {
+            n = Number(n) || 0;
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+            if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+            return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        function newUuid() {
+            return crypto.randomUUID ? crypto.randomUUID() : 'req-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+        }
+
+        // Retention: 1 minute .. 30 days (server clamps anyway).
+        function ttlSeconds() {
+            const v = parseInt((document.getElementById('ttlSelect') || {}).value || '1800', 10);
+            if (isNaN(v)) return 1800;
+            return Math.min(2592000, Math.max(60, v));
+        }
+
+        // Gunzip helper: null when unsupported or corrupt (caller toasts / aborts).
+        async function gunzipBytes(u8) {
+            if (typeof DecompressionStream === 'undefined') {
+                toast("Browser can't gunzip — ask sender to resend");
+                return null;
+            }
+            try {
+                const ds = new DecompressionStream('gzip');
+                const stream = new Blob([u8]).stream().pipeThrough(ds);
+                const buf = await new Response(stream).arrayBuffer();
+                return new Uint8Array(buf);
+            } catch (e) {
+                toast('Could not decompress file');
+                return null;
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        email, password,
+                        device_name: "Mobile Web",
+                        device_os: "mobile"
+                    })
+                });
+
+                if (!res.ok) throw new Error("Login failed");
+                const data = await res.json();
+
+                deviceId = data.device_id;
+                deviceToken = data.token;
+                localStorage.setItem('device_id', deviceId);
+                localStorage.setItem('device_token', deviceToken);
+
+                authScreen.classList.add('hidden');
+                mainScreen.classList.remove('hidden');
+                mainScreen.classList.add('flex');
+                reconnectDelay = 2000;
+                connectWS();
+                toast('Logged in');
+            } catch (e) {
+                document.getElementById('authError').classList.remove('hidden');
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            location.reload();
+        }
+
+        function connectWS() {
+            if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+            setStatus(false, 'Connecting...');
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                setStatus(true, 'Connected');
+                reconnectDelay = 2000;
+
+                ws.send(JSON.stringify({
+                    type: "hello",
+                    device_id: deviceId,
+                    token: deviceToken,
+                    name: "Mobile Web",
+                    os: "mobile"
+                }));
+
+                // Keepalive: server ignores unknown JSON types, so use a
+                // valid JSON message instead of a raw "ping" string.
+                if (pingTimer) clearInterval(pingTimer);
+                pingTimer = setInterval(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "ping" }));
+                    }
+                }, 25000);
+            };
+
+            ws.onclose = () => {
+                setStatus(false, 'Offline — retrying...');
+                if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+                if (!reconnectTimer) {
+                    reconnectTimer = setTimeout(connectWS, reconnectDelay);
+                    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+                }
+            };
+
+            ws.onerror = () => { try { ws.close(); } catch (e) {} };
+
+            ws.onmessage = (e) => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    if (msg.type === "deliver") {
+                        handleDeliver(msg);
+                    } else if (msg.type === "presence") {
+                        presenceDevices = msg.devices || [];
+                        renderDevices();
+                    } else if (msg.type === "error") {
+                        toast('Server error: ' + (msg.error || msg.message || 'unknown'));
+                    }
+                } catch(err) {}
+            };
+        }
+
+        function sendAck(itemId) {
+            if (ws && ws.readyState === WebSocket.OPEN && itemId) {
+                ws.send(JSON.stringify({ type: "ack", item_id: itemId, state: "received" }));
+            }
+        }
+
+        function handleDeliver(msg) {
+            sendAck(msg.item_id);
+            const kind = msg.kind || "text";
+            if (kind === "text") {
+                try {
+                    const decoded = b64ToUtf8(msg.payload || "");
+                    currentReceivedPayload = decoded;
+                    document.getElementById('receivedText').innerText = decoded;
+                    document.getElementById('receivedText').classList.add('text-white');
+                    document.getElementById('receivedText').classList.remove('text-gray-300');
+                    toast('Clipboard received from ' + (msg.origin_device_name || 'PC'));
+                } catch (err) {}
+            } else if (kind === "image" || kind === "file") {
+                addIncomingFile(msg);
+                toast((kind === "image" ? "Image" : "File") + ' received from ' + (msg.origin_device_name || 'device'));
+            }
+        }
+
+        // ---------- base64 helpers (unicode-safe, chunked, no spread) ----------
+        function b64ToUtf8(b64) {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new TextDecoder().decode(bytes);
+        }
+
+        function utf8ToB64(str) {
+            const bytes = new TextEncoder().encode(str);
+            let bin = "";
+            const CHUNK = 0x8000;
+            for (let i = 0; i < bytes.length; i += CHUNK) {
+                const sub = bytes.subarray(i, i + CHUNK);
+                for (let j = 0; j < sub.length; j++) bin += String.fromCharCode(sub[j]);
+            }
+            return btoa(bin);
+        }
+
+        function bytesToB64(bytes) {
+            let bin = "";
+            const CHUNK = 0x8000;
+            for (let i = 0; i < bytes.length; i += CHUNK) {
+                const sub = bytes.subarray(i, i + CHUNK);
+                for (let j = 0; j < sub.length; j++) bin += String.fromCharCode(sub[j]);
+            }
+            return btoa(bin);
+        }
+
+        function b64ToBytes(b64) {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return bytes;
+        }
+
+        // ---------- clipboard ----------
+        async function copyToPhone() {
+            if (!currentReceivedPayload) return;
+            try {
+                await navigator.clipboard.writeText(currentReceivedPayload);
+                const btn = document.querySelector('button[onclick="copyToPhone()"]');
+                const origText = btn.innerHTML;
+                btn.innerHTML = "Copied!";
+                btn.classList.add('bg-green-500');
+                setTimeout(() => { btn.innerHTML = origText; btn.classList.remove('bg-green-500'); }, 2000);
+            } catch (err) {
+                alert("Clipboard permission denied by browser. Try selecting and copying the text manually.");
+            }
+        }
+
+        async function pasteFromPhone() {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById('sendText').value = text;
+            } catch (err) {
+                alert("Please paste the text manually into the box.");
+            }
+        }
+
+        function sendToPC() {
+            const text = document.getElementById('sendText').value;
+            if (!text) return;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert("Not connected to server yet. Wait for the green dot, then retry.");
+                return;
+            }
+
+            const payload = utf8ToB64(text);
+            const uuid = newUuid();
+
+            ws.send(JSON.stringify({
+                type: "push",
+                item_id: uuid,
+                kind: "text",
+                mime: "text/plain",
+                size: text.length,
+                sha256: "",
+                ttl_s: ttlSeconds(),
+                targets: "all",
+                payload: payload
+            }));
+
+            const btn = document.querySelector('button[onclick="sendToPC()"]');
+            const origText = btn.innerHTML;
+            btn.innerHTML = "Sent!";
+            btn.classList.add('bg-green-500');
+            setTimeout(() => { btn.innerHTML = origText; btn.classList.remove('bg-green-500'); document.getElementById('sendText').value = ''; }, 2000);
+        }
+
+        // ---------- files ----------
+        function setProgress(msg, show) {
+            const el = document.getElementById('uploadProgress');
+            el.classList.toggle('hidden', !show);
+            if (show) el.textContent = msg;
+        }
+
+        async function sendFile() {
+            const input = document.getElementById('fileInput');
+            if (!input.files || !input.files.length) { toast('Choose a file first'); return; }
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                toast('Not connected — wait for green dot');
+                return;
+            }
+            const file = input.files[0];
+            const ONE_MB = 1024 * 1024;
+            try {
+                if (file.size <= ONE_MB) {
+                    setProgress('Encoding ' + file.name + '...', true);
+                    const buf = await file.arrayBuffer();
+                    const b64 = bytesToB64(new Uint8Array(buf));
+                    ws.send(JSON.stringify({
+                        type: "push",
+                        item_id: newUuid(),
+                        kind: "file",
+                        mime: file.type || "application/octet-stream",
+                        filename: file.name,
+                        size: file.size,
+                        sha256: "",
+                        ttl_s: ttlSeconds(),
+                        targets: "all",
+                        payload: b64
+                    }));
+                    setProgress('Sent ' + file.name, true);
+                    toast('File sent: ' + file.name);
+                    input.value = '';
+                    setTimeout(() => setProgress('', false), 2500);
+                } else {
+                    setProgress('Uploading ' + file.name + ' (' + humanSize(file.size) + ')...', true);
+                    const upRes = await fetch('/api/blobs', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + deviceToken },
+                        body: file
+                    });
+                    if (!upRes.ok) throw new Error('Blob upload failed (' + upRes.status + ')');
+                    const upData = await upRes.json();
+                    ws.send(JSON.stringify({
+                        type: "push",
+                        item_id: newUuid(),
+                        kind: "file",
+                        mime: file.type || "application/octet-stream",
+                        filename: file.name,
+                        size: file.size,
+                        sha256: "",
+                        ttl_s: ttlSeconds(),
+                        targets: "all",
+                        blob_id: upData.blob_id
+                    }));
+                    setProgress('Sent ' + file.name + ' via blob', true);
+                    toast('File sent: ' + file.name);
+                    input.value = '';
+                    setTimeout(() => setProgress('', false), 2500);
+                }
+            } catch (err) {
+                setProgress('Failed: ' + err.message, true);
+                toast('Send failed: ' + err.message);
+            }
+        }
+
+        async function addIncomingFile(msg) {
+            const list = document.getElementById('fileList');
+            const empty = list.querySelector('p.text-gray-500');
+            if (empty) empty.remove();
+
+            const card = document.createElement('div');
+            card.className = 'p-2.5 bg-gray-900 rounded-md border border-gray-700 space-y-2';
+
+            const fname = msg.filename || (msg.kind === 'image' ? 'image' : 'file');
+            const time = new Date().toLocaleTimeString();
+            const origin = msg.origin_device_name || 'unknown device';
+            const key = 'dl-' + (msg.item_id || newUuid());
+            const needsGunzip = msg.encoding === 'gzip';
+
+            let inner = '<div class="flex justify-between items-start gap-2">' +
+                '<div class="min-w-0"><p class="font-bold text-sm truncate">' + esc(fname) + '</p>' +
+                '<p class="text-[11px] text-gray-400 mono">' + esc(humanSize(msg.size)) + ' · ' + esc(origin) + ' · ' + esc(time) + '</p></div>' +
+                '<button data-key="' + esc(key) + '" class="dl-btn shrink-0 bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-md font-bold text-xs">Download</button></div>';
+
+            if (msg.kind === 'image' && (msg.payload || msg.blob_id)) {
+                inner += '<img class="preview-img" alt="' + esc(fname) + '">';
+            }
+            card.innerHTML = inner;
+            list.prepend(card);
+
+            const btn = card.querySelector('.dl-btn');
+            const setPreview = (url) => {
+                const img = card.querySelector('img.preview-img');
+                if (img) img.src = url;
+            };
+            if (msg.kind === 'image' && msg.payload) {
+                try {
+                    let bytes = b64ToBytes(msg.payload);
+                    if (needsGunzip) {
+                        const dec = await gunzipBytes(bytes);
+                        if (!dec) { btn.onclick = () => toast("Browser can't gunzip — ask sender to resend"); return; }
+                        bytes = dec;
+                    }
+                    const blob = new Blob([bytes], { type: msg.mime || 'image/*' });
+                    const url = URL.createObjectURL(blob);
+                    setPreview(url);
+                    btn.onclick = () => triggerDownload(url, fname);
+                } catch (err) {
+                    btn.onclick = () => toast('Could not decode image');
+                }
+            } else if (msg.payload) {
+                btn.onclick = async () => {
+                    try {
+                        let bytes = b64ToBytes(msg.payload);
+                        if (needsGunzip) {
+                            const dec = await gunzipBytes(bytes);
+                            if (!dec) return;
+                            bytes = dec;
+                        }
+                        const blob = new Blob([bytes], { type: msg.mime || 'application/octet-stream' });
+                        const url = URL.createObjectURL(blob);
+                        if (msg.kind === 'image') setPreview(url);
+                        triggerDownload(url, fname);
+                    } catch (err) { toast('Could not decode file'); }
+                };
+            } else if (msg.blob_id) {
+                btn.onclick = async () => {
+                    try {
+                        btn.textContent = 'Fetching...';
+                        const res = await fetch('/api/blobs/' + encodeURIComponent(msg.blob_id), {
+                            headers: { 'Authorization': 'Bearer ' + deviceToken }
+                        });
+                        if (!res.ok) throw new Error('Download failed (' + res.status + ')');
+                        const buf = await res.arrayBuffer();
+                        let bytes = new Uint8Array(buf);
+                        if (needsGunzip) {
+                            const dec = await gunzipBytes(bytes);
+                            if (!dec) { btn.textContent = 'Download'; return; }
+                            bytes = dec;
+                        }
+                        const blob = new Blob([bytes], { type: msg.mime || 'application/octet-stream' });
+                        const url = URL.createObjectURL(blob);
+                        if (msg.kind === 'image') setPreview(url);
+                        triggerDownload(url, fname);
+                        btn.textContent = 'Download';
+                    } catch (err) {
+                        btn.textContent = 'Download';
+                        toast('Download failed: ' + err.message);
+                    }
+                };
+                // Auto-fetch preview for blob images so <img> shows without a click.
+                if (msg.kind === 'image') {
+                    (async () => {
+                        try {
+                            const res = await fetch('/api/blobs/' + encodeURIComponent(msg.blob_id), {
+                                headers: { 'Authorization': 'Bearer ' + deviceToken }
+                            });
+                            if (!res.ok) return;
+                            const buf = await res.arrayBuffer();
+                            let bytes = new Uint8Array(buf);
+                            if (needsGunzip) {
+                                const dec = await gunzipBytes(bytes);
+                                if (!dec) return;
+                                bytes = dec;
+                            }
+                            const blob = new Blob([bytes], { type: msg.mime || 'image/*' });
+                            setPreview(URL.createObjectURL(blob));
+                        } catch (e) { /* preview optional */ }
+                    })();
+                }
+            } else {
+                btn.onclick = () => toast('No payload or blob_id for this file');
+            }
+        }
+
+        function triggerDownload(url, filename) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'download';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
+        // ---------- devices ----------
+        function renderDevices() {
+            const list = document.getElementById('deviceList');
+            list.innerHTML = '';
+            if (!presenceDevices.length) {
+                list.innerHTML = '<p class="text-gray-500 text-xs">No devices online.</p>';
+                return;
+            }
+            const sorted = [...presenceDevices].sort((a, b) => {
+                const aSelf = String(a.id) === String(deviceId) ? 0 : 1;
+                const bSelf = String(b.id) === String(deviceId) ? 0 : 1;
+                return aSelf - bSelf;
+            });
+            sorted.forEach(d => {
+                const isSelf = String(d.id) === String(deviceId);
+                const dot = d.online ? 'bg-green-500' : 'bg-gray-500';
+                const seen = d.online ? 'online now' : ('last seen ' + esc(d.last_seen || 'unknown'));
+                const row = document.createElement('div');
+                row.className = 'p-2.5 bg-gray-900 rounded-md border border-gray-700 flex items-center justify-between gap-2';
+                row.innerHTML =
+                    '<div class="flex items-center gap-2 min-w-0">' +
+                        '<div class="w-2 h-2 rounded-full shrink-0 ' + dot + '"></div>' +
+                        '<div class="min-w-0"><p class="font-bold text-sm truncate">' + esc(d.name || d.id) +
+                            (isSelf ? ' <span class="text-[10px] bg-blue-600 px-2 py-0.5 rounded ml-1">★ This device</span>' : '') + '</p>' +
+                        '<p class="text-[11px] text-gray-400 mono">' + esc(d.os || '') + ' · ' + seen + '</p></div>' +
+                    '</div>' +
+                    '<button class="shrink-0 text-[11px] bg-red-600 hover:bg-red-700 px-2.5 py-1.5 rounded-md font-bold">Disconnect</button>';
+                const btn = row.querySelector('button');
+                btn.onclick = () => revokeDevice(d.id, d.name, isSelf);
+                list.appendChild(row);
+            });
+        }
+
+        function revokeDevice(id, name, isSelf) {
+            const label = isSelf ? name + ' (this browser)' : name;
+            if (!confirm('Disconnect ' + label + '?')) return;
+            if (!ws || ws.readyState !== WebSocket.OPEN) { toast('Not connected'); return; }
+            ws.send(JSON.stringify({ type: "revoke", device_id: id }));
+            toast('Disconnect sent for ' + label);
+        }
+
+        function disconnectAllOthers() {
+            const others = (presenceDevices || []).filter(d => String(d.id) !== String(deviceId));
+            if (!others.length) { toast('No other devices to disconnect'); return; }
+            if (!confirm('Disconnect ' + others.length + ' other device(s)? This browser stays connected.')) return;
+            if (!ws || ws.readyState !== WebSocket.OPEN) { toast('Not connected'); return; }
+            others.forEach(d => {
+                try { ws.send(JSON.stringify({ type: "revoke", device_id: d.id })); } catch (e) {}
+            });
+            toast('Disconnect sent for ' + others.length + ' device(s)');
+        }
+    </script>
+</body>
+</html>

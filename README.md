@@ -103,6 +103,3 @@ Transfer method scales with file size:
 - A relay server instance (cloud-hosted)
 - The background agent running on each device (Windows, Mac, Linux, or VM)
 - The IDE plugin (IntelliJ) and/or mobile app for direct control
-
----
-

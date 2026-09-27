@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Devices"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.02" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="Phones and computers linked to your account."
+        android:textSize="12sp" />
+
+    <Button
+        android:id="@+id/btnDisconnectOthers"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Disconnect all others"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/tvDevicesEmpty"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="No presence data yet — waiting for the relay…"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/devicesList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:clipToPadding="false" />
+
+    <Button
+        android:id="@+id/btnDevicesBack"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Back"
+        android:textSize="13sp" />
+
+</LinearLayout>

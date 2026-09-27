@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CrossShare</string>
+    <style name="Theme.CrossShare" parent="Theme.Material3.DayNight.NoActionBar" />
+    <!-- Fully invisible: no background, no enter/exit animation, no preview. -->
+    <style name="Theme.CrossShare.Invisible" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+</resources>
