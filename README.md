@@ -1,65 +1,50 @@
 # CrossShare
 
-Copy on one device. Paste on another — text, files, screenshots. No LAN pairing, no cables, no cloud drive in between.
+Copy on one computer. Paste on another. It really is that simple.
 
-CrossShare is an account-based relay system: your devices hold a persistent WebSocket to a small Go server, which forwards clipboard and file pushes between them in ~100ms. Offline devices collect what's waiting when they come back.
+CrossShare keeps your clipboard and your files in sync across your devices. Copy text on your PC, paste it on your laptop. Drop a file in a folder, it shows up on your other machines. Screenshots and Explorer copies travel too, and they land ready to paste with Ctrl+V. If a device is offline, everything waits on the server until it comes back.
 
-> **Status:** the public relay server is currently **offline** — it's being reworked and will be **released soon**. The Android app is planned for release on **F-Droid**. Until then, you can self-host the server in one command (see below).
+> **Status:** the public server is offline right now while we rebuild it for release. The Android app is headed to F-Droid. Check the Releases page for downloads and the current server address.
 
-## How it works
+## Get going
 
-1. Run the relay server anywhere (your PC, a VPS, Railway — it's one binary).
-2. Run the agent on each computer, log in once with email + password.
-3. Copy anything. It appears on your other devices. Drop files in the send folder and they land on the others.
-
-Text, Explorer-copied files, folders (sent as `.zip`) and screenshots all sync PC ↔ PC and arrive pastable with `Ctrl+V`. Phones send/receive text and files through the app. Offline items wait on the server (configurable, 1 minute – 30 days).
-
-## Quick start (CLI)
+Grab the agent for your system from Releases (Windows, Mac, and Linux builds are all there), then:
 
 ```bash
-# 1. Start the server (one window)
-cd server
-go run .                 # listens on :8080
-
-# 2. Expose it (pick one)
-cloudflared tunnel --url http://localhost:8080   # free, URL changes on restart
-# ...or deploy server/ to Railway for a permanent URL (Dockerfile included)
-
-# 3. Start the agent (another window, on each computer)
-agent --server https://YOUR-SERVER-URL
-# first run asks email + password, then syncs. That's it.
-
-agent status             # connection, devices, inbox, folder paths
-agent send "hello"       # push text to your other devices now
-agent send-file ./a.zip  # push a file now
-agent devices            # list every device on your account
-agent disconnect         # pick a device to disconnect (numbered menu)
-agent folders            # show / change shared folders
-agent set-ttl 7d         # how long items wait for offline devices
-agent tray               # hide in the system tray instead of a console
-agent help               # full reference with examples
+agent --server PASTE-SERVER-ADDRESS-HERE
 ```
 
-Files without the CLI: drop them into the send folder (`agent folders` shows where) — received files land in the receive folder. Point the send folder at anywhere (even Desktop) with `agent set-send <path> --keep`: everything uploads once, files stay put, edits resend.
+First run asks for your email and password, then it just syncs in the background. Copy something and watch it appear on your other devices.
 
-## Components
+The day to day commands:
 
-| Path | Language | What |
-|------|----------|------|
-| `server/` | Go | Relay: accounts, WebSocket hub, SQLite store-and-forward, blob storage, serves the web UI |
-| `agent/` | Go | Desktop agent: clipboard watch, file watcher, local API `:9876`, CLI, tray, GUI (`agent/gui`) |
-| `android/` | Kotlin | Native Android app: background sync, notification / Quick-Settings-tile / inline-reply sending |
-| `web/` | HTML+JS | Browser fallback with the same features, served by the server |
-| `plugin/` | — | Reserved for the IntelliJ plugin |
+```bash
+agent status             # are we connected, what's where
+agent send "hello"       # push text right now
+agent send-file ./a.zip  # push a file right now
+agent devices            # every device on your account
+agent disconnect         # pick one to kick off, numbered menu
+agent folders            # where shared files live, and how to move them
+agent set-ttl 7d         # how long stuff waits for offline devices
+agent tray               # park it in the system tray, no console window
+agent help               # the full reference with examples
+```
 
-Builds: `go build` in `server/` or `agent/` (Windows builds need mingw, see repo notes), Android via Android Studio, APKs ship through GitHub Releases and (soon) F-Droid.
+Files work two ways. Either drop them in the send folder (see `agent folders` for the path) and they land in `received` everywhere else, or just copy them in Explorer like normal. Point the send folder at your Desktop with `agent set-send <path> --keep` and everything in it uploads once, stays put, and re-sends when you edit it.
 
-## Protocol (short version)
+On Android, install the APK (F-Droid soon), log in with the same account, and allow notifications. Copy something on your phone, tap Send clipboard in the notification, and it lands on your PC. Stuff from your PC pastes itself onto the phone automatically.
 
-- `POST /api/login` with email + password + device info → device token.
-- WebSocket `/ws`: `hello` to auth, `push` to send (text/file/image, inline or `blob_id`, optional gzip), `deliver` to receive, `ack` to confirm, `presence` for the device list, `revoke` to disconnect.
-- Big files ride `POST /api/blobs` (raw bytes, bearer token).
+## What's inside
+
+| Folder | What it is |
+|--------|-----------|
+| `server/` | The relay. Accounts, live routing, file storage, offline queue. |
+| `agent/` | The desktop program. Clipboard watch, file sync, terminal commands, tray icon, and a point and click GUI in `agent/gui`. |
+| `android/` | The native Android app, written in Kotlin. |
+| `web/` | A browser version with the same features, served by the relay itself. |
+
+Big files upload in the background and resume where they were going. Anything compressible goes over the wire gzipped. Anything you set to wait longer than 30 days gets capped there, anything under a minute gets bumped up to it.
 
 ## License
 
-AGPLv3 — see `LICENSE`.
+AGPLv3, see `LICENSE`. Contributions welcome.
