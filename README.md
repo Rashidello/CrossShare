@@ -1,105 +1,65 @@
 # CrossShare
 
-Instant, cross-device clipboard and file sharing across laptops, desktops, VMs, and mobile — no manual transfers, email hacks, or broken VM guest tools.
+Copy on one device. Paste on another — text, files, screenshots. No LAN pairing, no cables, no cloud drive in between.
 
-## What it does
+CrossShare is an account-based relay system: your devices hold a persistent WebSocket to a small Go server, which forwards clipboard and file pushes between them in ~100ms. Offline devices collect what's waiting when they come back.
 
-Copy something on one device, paste it on another — usually in under 100ms. Drop a file in a folder on one machine, it shows up on the others automatically. Works online and offline, with queued delivery for devices that are asleep or disconnected.
+> **Status:** the public relay server is currently **offline** — it's being reworked and will be **released soon**. The Android app is planned for release on **F-Droid**. Until then, you can self-host the server in one command (see below).
 
-## Architecture
+## How it works
 
-CrossShare is a three-part relay system:
+1. Run the relay server anywhere (your PC, a VPS, Railway — it's one binary).
+2. Run the agent on each computer, log in once with email + password.
+3. Copy anything. It appears on your other devices. Drop files in the send folder and they land on the others.
 
-| Component | Role |
-|---|---|
-| **Relay Server** (cloud, Go) | Routes messages between devices over persistent WebSocket connections. Pure relay — no business logic about clipboards or files, it just forwards JSON between devices owned by the same user. |
-| **Background Agent** | Native process on Windows, Mac, Linux, or a VM. Polls the OS clipboard, watches local drop folders, and talks to the relay server. |
-| **IDE Plugin & Mobile App** | Control surface inside IntelliJ and on mobile. Lets you send snippets directly from the editor or a phone, and hosts a local REST API for the agent. |
+Text, Explorer-copied files, folders (sent as `.zip`) and screenshots all sync PC ↔ PC and arrive pastable with `Ctrl+V`. Phones send/receive text and files through the app. Offline items wait on the server (configurable, 1 minute – 30 days).
 
-```
-┌─────────────────────┐                                          ┌─────────────────────┐
-│   DEVICE A           │                                         │   DEVICE B           │
-│  Clipboard Monitor   │──push (WebSocket)──►┌──────────┐◄───────│  Clipboard Writer     │
-│  (50ms poll)         │                      │  RELAY   │        │                      │
-│  File Watcher        │──blob upload (HTTP)─►│  SERVER  │◄──────│  File Writer          │
-│  (fsnotify)          │                      │ (SQLite  │        │                      │
-│  Local API :9876     │                      │  WAL)    │        │  Local API :9876      │
-│  IDE Plugin          │                      └──────────┘        │  IDE Plugin           │
-└─────────────────────┘                                          └─────────────────────┘
-```
+## Quick start (CLI)
 
-## How a copy/paste travels (<100ms)
+```bash
+# 1. Start the server (one window)
+cd server
+go run .                 # listens on :8080
 
-1. **Detection** — the agent polls the OS clipboard every 50ms, catches `Ctrl+C`, and hashes the content.
-2. **Transmission** — the content is packaged into JSON and sent up the open WebSocket.
-3. **Instant relay** — the server forwards the message to the user's other online devices immediately, *before* writing anything to the database (the DB write happens asynchronously).
-4. **OS injection** — the receiving agent decodes the payload and writes it straight into the target OS clipboard.
-5. **Paste** — the user hits `Ctrl+V` and the content is there.
+# 2. Expose it (pick one)
+cloudflared tunnel --url http://localhost:8080   # free, URL changes on restart
+# ...or deploy server/ to Railway for a permanent URL (Dockerfile included)
 
-## Setup & authentication
+# 3. Start the agent (another window, on each computer)
+agent --server https://YOUR-SERVER-URL
+# first run asks email + password, then syncs. That's it.
 
-- **Login** — the device authenticates with account credentials and receives a unique device token.
-- **Hashed token storage** — the device keeps the raw token; the server stores only a SHA256 fingerprint. Even if the database is stolen, no one can impersonate a device from it.
-- **Persistent connection** — a bidirectional WebSocket stays open 24/7 to avoid connection setup delay.
-- **Keepalive** — a ping every 10 seconds stops cloud proxies (Cloudflare, Railway, etc.) from silently dropping idle connections.
-
-## Loop protection
-
-Without safeguards, a copy on Device A would echo forever: A sends to B, B writes to its clipboard, B's poller sees "new" text and sends it back to A, and so on.
-
-CrossShare prevents this with two hash guards:
-
-- **`lastSentHash`** — set when a device sends text, so it never re-sends what it just sent.
-- **`lastAppliedHash`** — set when a device receives and writes text, so its own poller ignores that text on the next check.
-
-```
-Copy "hello" on Device A:
-  A: lastSentHash = SHA256("hello")       → sends to server
-  B: receives it, writes "hello" to clipboard
-  B: lastAppliedHash = SHA256("hello")
-  B: poller reads "hello" → matches lastAppliedHash → skipped, no echo
+agent status             # connection, devices, inbox, folder paths
+agent send "hello"       # push text to your other devices now
+agent send-file ./a.zip  # push a file now
+agent devices            # list every device on your account
+agent disconnect         # pick a device to disconnect (numbered menu)
+agent folders            # show / change shared folders
+agent set-ttl 7d         # how long items wait for offline devices
+agent tray               # hide in the system tray instead of a console
+agent help               # full reference with examples
 ```
 
-## File transfer
+Files without the CLI: drop them into the send folder (`agent folders` shows where) — received files land in the receive folder. Point the send folder at anywhere (even Desktop) with `agent set-send <path> --keep`: everything uploads once, files stay put, edits resend.
 
-Transfer method scales with file size:
+## Components
 
-- **Inline streaming (< 1MB)** — small files and snippets are gzipped and sent directly over the WebSocket.
-- **Blob storage (> 1MB)** — larger files are uploaded over HTTP to the server (`/api/blobs`); the receiver gets a signal token and streams the file down separately.
-- **Drop folders** — files placed in `~/CrossShare/send` on one device land automatically in `~/CrossShare/received` on the others.
-- Directories are zipped in memory before sending. Files that don't compress well (images, zips) are sent uncompressed.
+| Path | Language | What |
+|------|----------|------|
+| `server/` | Go | Relay: accounts, WebSocket hub, SQLite store-and-forward, blob storage, serves the web UI |
+| `agent/` | Go | Desktop agent: clipboard watch, file watcher, local API `:9876`, CLI, tray, GUI (`agent/gui`) |
+| `android/` | Kotlin | Native Android app: background sync, notification / Quick-Settings-tile / inline-reply sending |
+| `web/` | HTML+JS | Browser fallback with the same features, served by the server |
+| `plugin/` | — | Reserved for the IntelliJ plugin |
 
-## Offline support (store-and-forward)
+Builds: `go build` in `server/` or `agent/` (Windows builds need mingw, see repo notes), Android via Android Studio, APKs ship through GitHub Releases and (soon) F-Droid.
 
-- **Pending queue** — items sent to an offline device are held on the server with expiration timers: 30 minutes for text, 24 hours for files.
-- **Reconnection catch-up** — when a device comes back online, the server delivers everything that was queued for it.
-- **Safe inbox** — queued/backlog items land in a dedicated inbox in the IDE plugin instead of silently overwriting whatever's currently on the clipboard.
+## Protocol (short version)
 
-## Performance notes
+- `POST /api/login` with email + password + device info → device token.
+- WebSocket `/ws`: `hello` to auth, `push` to send (text/file/image, inline or `blob_id`, optional gzip), `deliver` to receive, `ack` to confirm, `presence` for the device list, `revoke` to disconnect.
+- Big files ride `POST /api/blobs` (raw bytes, bearer token).
 
-| Optimization | Effect |
-|---|---|
-| Async DB writes on the delivery path | Cuts delivery latency from ~6s to ~100ms |
-| SQLite WAL mode | Writes drop from ~2s to ~1ms each (avoids full fsync per insert) |
-| `synchronous=NORMAL` | Fewer fsyncs per transaction |
-| 10s WebSocket keepalive | Stops idle connections being dropped by cloud proxies |
-| Gzip on file transfer | Cuts transfer size 60–90% for text/code |
-| 1MB inline/blob threshold | Small items stay fast over WebSocket; large ones stream over HTTP |
-| Buffered send channel | Clipboard copies never block waiting on a slow network |
-| Native OS clipboard APIs | Avoids subprocess overhead that caused lag under WSL |
+## License
 
-## Security model
-
-| Layer | Mechanism |
-|---|---|
-| User passwords | bcrypt-hashed |
-| Device tokens | SHA256 hash stored server-side; raw token lives only on the device |
-| WebSocket auth | First message on a new connection must carry a valid device ID + token |
-| Local API | Requires a bearer token, so other apps on the machine can't read your clipboard data |
-| Blob access | Server checks a blob belongs to the requesting user's items before serving it |
-
-## Requirements
-
-- A relay server instance (cloud-hosted)
-- The background agent running on each device (Windows, Mac, Linux, or VM)
-- The IDE plugin (IntelliJ) and/or mobile app for direct control
+AGPLv3 — see `LICENSE`.
